@@ -35,23 +35,5 @@
         ],
         "pages": 370,
         "price": 32.5
-    },
-    {
-        "id": "c2eb10f0-82ed-4837-a6cd-8cbe74b71bb8",
-        "title": "The Go Programming Language",
-        "ganres": [
-            "programming"
-        ],
-        "pages": 370,
-        "price": 32.5
-    },
-    {
-        "id": "94449c6e-909a-4a78-bd55-8993a0422d50",
-        "title": "The Go Programming Language",
-        "ganres": [
-            "programming"
-        ],
-        "pages": 370,
-        "price": 32.5
     }
 ]
