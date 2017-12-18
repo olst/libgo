@@ -22,37 +22,30 @@ type Book struct {
 
 // AppCtx - application context
 type AppCtx struct {
-	dbData []byte
-	dbPath string
-	books  []Book
+	DbPath string
+	Books  []Book
 }
 
 // BookIndex - get all books
 func (ctx *AppCtx) BookIndex(w http.ResponseWriter, r *http.Request) {
-	aux.WriteSuccess(w, aux.GetFileData(ctx.dbPath))
+	aux.WriteSuccess(w, http.StatusOK, aux.GetFileData(ctx.DbPath))
 }
 
 // GetBook - get book by id
 func (ctx *AppCtx) GetBook(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
-	err := json.Unmarshal(aux.GetFileData(ctx.dbPath), &ctx.books)
+	err := json.Unmarshal(aux.GetFileData(ctx.DbPath), &ctx.Books)
 	aux.CheckError(err)
-	for _, book := range ctx.books {
-		if id == book.ID {
-			b := book
-			jsonBook, err := json.Marshal(b)
-			aux.CheckError(err)
-			aux.WriteSuccess(w, jsonBook)
-			return
-		}
+	book, idx := aux.GetBookByUUID(id, ctx.Books)
+	if idx > 0 {
+		aux.WriteSuccess(w, http.StatusOK, book)
 	}
-	aux.WriteError(w, http.StatusNotFound)
 }
 
 // AddBook - add a new book
 func (ctx *AppCtx) AddBook(w http.ResponseWriter, r *http.Request) {
-	err := json.Unmarshal(aux.GetFileData(ctx.dbPath), &ctx.books)
+	err := json.Unmarshal(aux.GetFileData(ctx.DbPath), &ctx.Books)
 	aux.CheckError(err)
 
 	decoder := json.NewDecoder(r.Body)
@@ -66,9 +59,34 @@ func (ctx *AppCtx) AddBook(w http.ResponseWriter, r *http.Request) {
 	stringUUID := string(uuid)
 	book.ID = strings.TrimSuffix(stringUUID, "\n")
 
-	ctx.books = append(ctx.books, *book)
-	booksBytes, err := json.MarshalIndent(ctx.books, "", "    ")
+	ctx.Books = append(ctx.Books, *book)
+	booksBytes, err := json.MarshalIndent(ctx.Books, "", "    ")
 	aux.CheckError(err)
 
-	err = ioutil.WriteFile(ctx.dbPath, booksBytes, 0644)
+	err = ioutil.WriteFile(ctx.DbPath, booksBytes, 0644)
+	aux.CheckError(err)
+}
+
+// DeleteBook - delete book by id
+func (ctx *AppCtx) DeleteBook(w http.ResponseWriter, r *http.Request) {
+	err := json.Unmarshal(aux.GetFileData(ctx.DbPath), &ctx.Books)
+	aux.CheckError(err)
+
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	_, idx := aux.GetBookByUUID(id, ctx.Books)
+	if idx > 0 {
+		ctx.Books = append(ctx.Books[:idx], ctx.Books[idx+1:]...)
+		booksBytes, err := json.MarshalIndent(ctx.Books, "", "    ")
+		aux.CheckError(err)
+
+		err = ioutil.WriteFile(ctx.DbPath, booksBytes, 0644)
+		aux.CheckError(err)
+
+		aux.WriteSuccess(w, http.StatusNoContent, nil)
+	} else {
+		aux.WriteError(w, http.StatusNotFound)
+	}
+
 }
