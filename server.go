@@ -3,7 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
-	"ostyhar/library/api"
+
+	"github.com/olst/libgo/api"
 
 	"github.com/gorilla/mux"
 )
@@ -18,5 +19,6 @@ func main() {
 	router.HandleFunc("/books/{id}", ctx.GetBook).Methods("GET")
 	router.HandleFunc("/books", ctx.AddBook).Methods("POST")
 	router.HandleFunc("/books/{id}", ctx.DeleteBook).Methods("DELETE")
+
 	log.Fatal(http.ListenAndServe(":8081", router))
 }
