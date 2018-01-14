@@ -4,21 +4,37 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/olst/libgo/api"
-
 	"github.com/gorilla/mux"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/olst/libgo/api"
 )
 
 func main() {
-	ctx := api.AppCtx{
-		Books:  make([]api.Book, 1),
-		DbPath: "./library.json",
-	}
+
+	//jsonCtx := api.NewJSONctx()
+	sqliteCtx := api.NewSqliteCtx("./library.db")
+	defer sqliteCtx.CloseDB()
+
 	router := mux.NewRouter()
-	router.HandleFunc("/books", ctx.BookIndex).Methods("GET")
-	router.HandleFunc("/books/{id}", ctx.GetBook).Methods("GET")
-	router.HandleFunc("/books", ctx.AddBook).Methods("POST")
-	router.HandleFunc("/books/{id}", ctx.DeleteBook).Methods("DELETE")
+
+	//initHandlers(router, jsonCtx)
+	initHandlers(router, sqliteCtx)
 
 	log.Fatal(http.ListenAndServe(":8081", router))
+}
+
+type commonContext interface {
+	BookIndex(w http.ResponseWriter, r *http.Request)
+	GetBook(w http.ResponseWriter, r *http.Request)
+	AddBook(w http.ResponseWriter, r *http.Request)
+	DeleteBook(w http.ResponseWriter, r *http.Request)
+	EditBook(w http.ResponseWriter, r *http.Request)
+}
+
+func initHandlers(router *mux.Router, context commonContext) {
+	router.HandleFunc("/books/", context.BookIndex).Methods("GET")
+	router.HandleFunc("/books/{id}", context.GetBook).Methods("GET")
+	router.HandleFunc("/books/", context.AddBook).Methods("POST")
+	router.HandleFunc("/books/{id}", context.DeleteBook).Methods("DELETE")
+	router.HandleFunc("/books/{id}", context.EditBook).Methods("PUT")
 }

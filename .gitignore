@@ -1,4 +1,7 @@
+debug
+*.db
+*.txt
+.*
+!.gitignore
 *
 *.json
-!*.go
-!.gitignore
