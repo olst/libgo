@@ -16,10 +16,10 @@ func main() {
 	defer sqliteCtx.CloseDB()
 
 	router := mux.NewRouter()
+	router.StrictSlash(false)
 
 	//initHandlers(router, jsonCtx)
 	initHandlers(router, sqliteCtx)
-
 	log.Fatal(http.ListenAndServe(":8081", router))
 }
 
@@ -34,7 +34,7 @@ type commonContext interface {
 func initHandlers(router *mux.Router, context commonContext) {
 	router.HandleFunc("/books/", context.BookIndex).Methods("GET")
 	router.HandleFunc("/books/{id}", context.GetBook).Methods("GET")
-	router.HandleFunc("/books/", context.AddBook).Methods("POST")
+	router.HandleFunc("/books/", AddBook).Methods("POST")
 	router.HandleFunc("/books/{id}", context.DeleteBook).Methods("DELETE")
 	router.HandleFunc("/books/{id}", context.EditBook).Methods("PUT")
 }

@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"sync"
+	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/olst/libgo/model"
@@ -14,9 +15,13 @@ import (
 
 var tableName = "books_table"
 
+const (
+	add    = "add"
+	delete = "delete"
+)
+
 // SqliteCtx - application sqlite context
 type SqliteCtx struct {
-	sync.RWMutex
 	db     *sql.DB
 	dbName string
 }
@@ -55,7 +60,7 @@ func (sqliteCtx *SqliteCtx) BookIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	book := new(model.Book)
-
+	scannedBooks := []*model.Book{}
 	for rows.Next() {
 		err = rows.Scan(&book.ID, &book.Title, &book.Genres,
 			&book.Pages, &book.Price)
@@ -63,16 +68,15 @@ func (sqliteCtx *SqliteCtx) BookIndex(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
-		//jsonBook, err := json.Marshal(book)
-		jsonBook, err := json.MarshalIndent(book, "", "    ")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.Write(jsonBook)
+		scannedBooks = append(scannedBooks, book)
 	}
+	jsonScannedBooks, err := json.MarshalIndent(scannedBooks, "", "    ")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Write(jsonScannedBooks)
 }
 
 func getBookByUUIDsql(sqliteCtx *SqliteCtx, w http.ResponseWriter, r *http.Request) []byte {
@@ -102,57 +106,62 @@ func getBookByUUIDsql(sqliteCtx *SqliteCtx, w http.ResponseWriter, r *http.Reque
 
 // GetBook by ID
 func (sqliteCtx *SqliteCtx) GetBook(w http.ResponseWriter, r *http.Request) {
-	sqliteCtx.Lock()
-	defer sqliteCtx.Unlock()
 	jsonBook := getBookByUUIDsql(sqliteCtx, w, r)
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.Write(jsonBook)
 }
 
-// AddBook ...
-func (sqliteCtx *SqliteCtx) AddBook(w http.ResponseWriter, r *http.Request) {
-	sqliteCtx.Lock()
-	defer sqliteCtx.Unlock()
-	decoder := json.NewDecoder(r.Body)
-	book := new(model.Book)
-	err := decoder.Decode(book)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+// DBWriter writes data into DB
+type DBWriter struct {
+	*SqliteCtx
+	action string
+}
 
+func (dbWriter DBWriter) Write(inputBytes []byte) (int, error) {
+	db := dbWriter.db
+	switch dbWriter.action {
+	case add:
+		{
+			if err := bookAdder(inputBytes, db); err != nil {
+				return 0, err
+			}
+		}
+	}
+	return len(inputBytes), nil
+}
+
+// AddBook ...
+func AddBook(w http.ResponseWriter, r *http.Request) {
+	dbWriter := DBWriter{action: add}
+	tee := io.TeeReader(r.Body, dbWriter)
+	io.Copy(os.Stdout, tee)
+}
+
+func bookAdder(inputBytes []byte, db *sql.DB) error {
+	book := new(model.Book)
+	err := json.Unmarshal(inputBytes, book)
+	if err != nil {
+		return err
+	}
 	book.ID = uuid.NewV4().String()
 
-	query := fmt.Sprintf("INSERT INTO %s"+
-		"(id, title, genres, pages, price) values(?,?,?,?,?)", tableName)
+	query := `INSERT INTO books_table
+	(id, title, genres, pages, price) values(?,?,?,?,?)`
 
-	statement, err := sqliteCtx.db.Prepare(query)
+	statement, err := db.Prepare(query)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
-
 	_, err = statement.Exec(&book.ID, &book.Title, &book.Genres,
 		&book.Pages, &book.Price)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
-
-	jsonBook, err := json.MarshalIndent(book, "", "    ")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Write(jsonBook)
+	return nil
 }
 
 // DeleteBook ...
 func (sqliteCtx *SqliteCtx) DeleteBook(w http.ResponseWriter, r *http.Request) {
-	sqliteCtx.Lock()
-	defer sqliteCtx.Unlock()
 	vars := mux.Vars(r)
 	id, ok := vars["id"]
 	if !ok {
@@ -182,8 +191,6 @@ func (sqliteCtx *SqliteCtx) DeleteBook(w http.ResponseWriter, r *http.Request) {
 
 // EditBook ...
 func (sqliteCtx *SqliteCtx) EditBook(w http.ResponseWriter, r *http.Request) {
-	sqliteCtx.Lock()
-	defer sqliteCtx.Unlock()
 	vars := mux.Vars(r)
 	id, ok := vars["id"]
 	if !ok {
