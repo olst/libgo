@@ -121,10 +121,8 @@ func (dbWriter DBWriter) Write(inputBytes []byte) (int, error) {
 	db := dbWriter.db
 	switch dbWriter.action {
 	case add:
-		{
-			if err := bookAdder(inputBytes, db); err != nil {
-				return 0, err
-			}
+		if err := bookAdder(inputBytes, db); err != nil {
+			return 0, err
 		}
 	}
 	return len(inputBytes), nil
@@ -154,10 +152,7 @@ func bookAdder(inputBytes []byte, db *sql.DB) error {
 	}
 	_, err = statement.Exec(&book.ID, &book.Title, &book.Genres,
 		&book.Pages, &book.Price)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // DeleteBook ...

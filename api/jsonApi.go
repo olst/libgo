@@ -31,6 +31,8 @@ func NewJSONctx() *JSONctx {
 	return c
 }
 
+func (jsonCtx *JSONctx) Close() error { return nil }
+
 // BookIndex - get all books
 func (jsonCtx *JSONctx) BookIndex(w http.ResponseWriter, r *http.Request) {
 	data, err := getFileData(jsonCtx.DbPath)
@@ -49,8 +51,8 @@ func (jsonCtx *JSONctx) GetBook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "No id specified", http.StatusBadRequest)
 	}
 
-	jsonCtx.Lock()
-	defer jsonCtx.Unlock()
+	jsonCtx.RLock()
+	defer jsonCtx.RUnlock()
 
 	data, err := getFileData(jsonCtx.DbPath)
 	if err != nil {
@@ -114,6 +116,9 @@ func (jsonCtx *JSONctx) AddBook(w http.ResponseWriter, r *http.Request) {
 
 // DeleteBook - delete book by id
 func (jsonCtx *JSONctx) DeleteBook(w http.ResponseWriter, r *http.Request) {
+	jsonCtx.Lock()
+	defer jsonCtx.Unlock()
+
 	data, err := getFileData(jsonCtx.DbPath)
 	if err != nil {
 		http.Error(w, "Error: Couldn't open a file",
@@ -250,23 +255,22 @@ func getBookByUUIDjson(uuid string, input interface{}) ([]byte, error) {
 		log.Printf("Book %s not found", uuid)
 		return nil, nil
 	}
-	return nil, errors.New("You should use slices")
+	return nil, errors.New("you should use slices")
 }
 
 func getBookIndex(uuid string, input interface{}) (int, error) {
 	inputValRef := reflect.ValueOf(input)
-	switch inputValRef.Type().Kind() {
-	case reflect.Slice:
-		books := reflect.ValueOf(input)
-		for i := 0; i < books.Len(); i++ {
-			currentBookUUID := reflect.Indirect(books.Index(i)).FieldByName("ID")
-			if uuid == currentBookUUID.String() {
-				return i, nil
-			}
-		}
-		return -1, nil
+	if inputValRef.Type().Kind() != reflect.Slice {
+		return -1, errors.New("you should use slices")
 	}
-	return -1, errors.New("You should use slices")
+
+	for i := 0; i < inputValRef.Len(); i++ {
+		currentBookUUID := reflect.Indirect(inputValRef.Index(i)).FieldByName("ID")
+		if uuid == currentBookUUID.String() {
+			return i, nil
+		}
+	}
+	return -1, nil
 }
 
 func writeSuccess(w http.ResponseWriter, status int, data []byte) {
